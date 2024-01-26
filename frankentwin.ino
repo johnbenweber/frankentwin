@@ -2,6 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <msTask.h>
 #include <Bounce2.h>
+#include <EEPROM.h>
 
 LiquidCrystal_I2C lcd(0x27, 16, 2); // Set the LCD address to 0x27 for a 16 chars and 2 line display
 
@@ -25,8 +26,9 @@ Bounce2::Button timer2UpDebouncer = Bounce2::Button();
 Bounce2::Button timer2DownDebouncer = Bounce2::Button();
 
 // Event durations (in milliseconds)
-unsigned long durationEvent1 = 5000;
-unsigned long durationEvent2 = 5000;
+unsigned long durationEvent1;
+unsigned long durationEvent2;
+unsigned long defaultDuration = 5000;
 unsigned long maxDuration = 99900;
 
 unsigned long event1Start = 0;
@@ -47,6 +49,7 @@ bool timer2ContinuousMode = false;
 
 void stopEvent1();
 void stopEvent2();
+
 msTask task1(durationEvent1, stopEvent1);
 msTask task2(durationEvent2, stopEvent2);
 
@@ -74,6 +77,17 @@ void setup() {
   timer1DownDebouncer.setPressedState(LOW);
   timer2UpDebouncer.setPressedState(LOW);
   timer2DownDebouncer.setPressedState(LOW);
+
+  EEPROM.get(0, durationEvent1);
+  EEPROM.get(sizeof(durationEvent1), durationEvent2);
+
+  if ((durationEvent1 < 0) || (durationEvent1 > maxDuration)) {
+    durationEvent1 = defaultDuration;
+  }
+  
+  if ((durationEvent2 < 0) || (durationEvent2 > maxDuration)) {
+    durationEvent2 = defaultDuration;
+  }  
 
   msTask::init();
   
@@ -125,6 +139,9 @@ void loop() {
   // Toggle programming mode
   if (programDebouncer.pressed() && event1ActiveTemp == false && event2ActiveTemp == false) {
       programmingMode = !programmingMode;
+
+      EEPROM.put(0, durationEvent1);
+      EEPROM.put(sizeof(durationEvent1), durationEvent2); 
   }
 
   // Toggle continuous mode
