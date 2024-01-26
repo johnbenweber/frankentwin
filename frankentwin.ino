@@ -1,7 +1,6 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <msTask.h>
-#include <MsTimer2.h>
 #include <Bounce2.h>
 
 LiquidCrystal_I2C lcd(0x27, 16, 2); // Set the LCD address to 0x27 for a 16 chars and 2 line display
@@ -41,10 +40,15 @@ volatile bool event1Active = false;
 volatile bool event2Active = false;
 bool event1ActiveTemp = false;
 bool event2ActiveTemp = false;
+
 bool programmingMode = false;
+bool timer1ContinuousMode = false;
+bool timer2ContinuousMode = false;
 
 void stopEvent1();
-msTask task(durationEvent1, stopEvent1);
+void stopEvent2();
+msTask task1(durationEvent1, stopEvent1);
+msTask task2(durationEvent2, stopEvent2);
 
 void setup() {
   debouncer1.attach(buttonStartEvent1,INPUT_PULLUP);
@@ -86,13 +90,25 @@ void loop() {
   // Event 1 start
   if (debouncer1.pressed() && !event1ActiveTemp && !programmingMode) {
       event1Active = true;
-      startEvent1(event1Start, durationEvent1);
+      if (timer1ContinuousMode) {
+        startEvent1(event1Start, maxDuration+1);
+      } else {
+        startEvent1(event1Start, durationEvent1);
+      }
+  } else if (debouncer1.released() && event1Active && timer1ContinuousMode) {
+    stopEvent1();
   }
 
   // Event 2 start
   if (debouncer2.pressed() && !event2ActiveTemp && !programmingMode) {
       event2Active = true;
-      startEvent2(event2Start, durationEvent2);
+      if (timer2ContinuousMode) {
+        startEvent2(event2Start, maxDuration+1);
+      } else {
+        startEvent2(event2Start, durationEvent2);
+      }
+  } else if (debouncer2.released() && event2Active && timer2ContinuousMode) {
+    stopEvent2();
   }
 
   noInterrupts();
@@ -111,8 +127,24 @@ void loop() {
       programmingMode = !programmingMode;
   }
 
+  // Toggle continuous mode
+  if (timer1UpDebouncer.pressed() && event1ActiveTemp == false && programmingMode == false) {
+    timer1ContinuousMode = true;
+  } else if (timer1DownDebouncer.pressed() && event1ActiveTemp == false && programmingMode == false) {
+    timer1ContinuousMode = false;
+  }
+
+  // Toggle continuous mode
+  if (timer2UpDebouncer.pressed() && event2ActiveTemp == false && programmingMode == false) {
+    timer2ContinuousMode = true;
+  } else if (timer2DownDebouncer.pressed() && event2ActiveTemp == false && programmingMode == false) {
+    timer2ContinuousMode = false;
+  }
+
   // Only adjust durations in programming mode
   if (programmingMode) {
+    timer1ContinuousMode = false;
+    timer2ContinuousMode = false;
     if (timer1UpDebouncer.pressed()) {
       adjustDuration(durationEvent1, 100);
     } else if (timer1DownDebouncer.pressed()) {
@@ -126,14 +158,18 @@ void loop() {
     }
   }
 
-  if (event1ActiveTemp) {
+  if (event1ActiveTemp && !timer1ContinuousMode) {
     remaining1 = durationEvent1-(millis()-event1Start);
+  } else if (timer1ContinuousMode) {
+    remaining1 = maxDuration+1;
   } else {
     remaining1 = durationEvent1;
   }
 
-  if (event2ActiveTemp) {
+  if (event2ActiveTemp && !timer2ContinuousMode) {
     remaining2 = durationEvent2-(millis()-event2Start);
+  } else if (timer2ContinuousMode) {
+    remaining2 = maxDuration+1;
   } else {
     remaining2 = durationEvent2;
   }
@@ -150,27 +186,31 @@ void adjustDuration(unsigned long &eventDur, int change) {
 void startEvent1(unsigned long &e1Start, unsigned long durEvent1) {
   e1Start = millis();
   digitalWrite(ledEvent1, HIGH);
-  task.setPeriod(durEvent1);
-  task.start();
+  if (durEvent1 <= maxDuration) {
+    task1.setPeriod(durEvent1);
+    task1.start();
+  }
 }
 
 void stopEvent1() {
   event1Active = false;
   digitalWrite(ledEvent1, LOW);
-  task.stop();
+  task1.stop();
 }
 
 void startEvent2(unsigned long &e2Start, unsigned long durEvent2) {
   e2Start = millis();
   digitalWrite(ledEvent2, HIGH);
-  MsTimer2::set(durEvent2, stopEvent2); // Set duration
-  MsTimer2::start();
+  if (durEvent2 <= maxDuration) {
+    task2.setPeriod(durEvent2);
+    task2.start();
+  }
 }
 
 void stopEvent2() {
   event2Active = false;
   digitalWrite(ledEvent2, LOW);
-  MsTimer2::stop();
+  task2.stop();
 }
 
 void updateLCD(bool progMode, unsigned long rem1, unsigned long rem2) {
@@ -187,13 +227,21 @@ void updateLCD(bool progMode, unsigned long rem1, unsigned long rem2) {
   
   // Display Timer 1 status
   lcd.setCursor(0, 1); // Bottom left corner
-  formatTime(time1, rem1);
-  lcd.print(time1);
+  if (rem1 <= maxDuration) {
+    formatTime(time1, rem1);
+    lcd.print(time1);
+  } else {
+    lcd.print("CONT.");
+  }
 
   // Display Timer 2 status
   lcd.setCursor(11, 1); // Bottom right corner
-  formatTime(time2, rem2);
-  lcd.print(time2);
+  if (rem2 <= maxDuration) {
+    formatTime(time2, rem2);
+    lcd.print(time2);
+  } else {
+    lcd.print("CONT.");
+  }
 }
 
 void formatTime(char* timeStr, unsigned long milliseconds) {
@@ -208,4 +256,3 @@ void formatTime(char* timeStr, unsigned long milliseconds) {
     sprintf(timeStr, " %d.%ds", digit2, decimal);
   }
 }
-
