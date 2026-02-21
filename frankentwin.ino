@@ -28,6 +28,7 @@ Bounce2::Button button2Dn = Bounce2::Button();
 // Event durations (in milliseconds)
 unsigned long defaultDuration = 5000;
 unsigned long maxDuration = 99900;
+unsigned long purgeDuration = 1500;
 
 unsigned long output1Duration;
 unsigned long output2Duration;
@@ -94,14 +95,13 @@ void setup() {
     output2Duration = defaultDuration;
   }
 
-  if ((output1Mode < 0) || (output1Mode > 2)) {
+  if ((output1Mode < 0) || (output1Mode > 3)) {
     output1Mode = 0;
   }
   
-  if ((output2Mode < 0) || (output2Mode > 2)) {
+  if ((output2Mode < 0) || (output2Mode > 3)) {
     output2Mode = 0;
   }
-
 
   msTask::init();
   timer1Task.start();
@@ -127,6 +127,9 @@ void loop() {
     if (output1Mode == 0) { // Timed mode
       timer1Task.setPeriod(output1Duration);
       timer1Task.start();
+    } else if (output1Mode == 3) { // Purge mode
+      timer1Task.setPeriod(purgeDuration);
+      timer1Task.start();
     } else {
       timer1Task.setPeriod(maxDuration);
       timer1Task.start();
@@ -143,6 +146,9 @@ void loop() {
     digitalWrite(pinOutput2, HIGH);
     if (output2Mode == 0) { // Timed mode
       timer2Task.setPeriod(output2Duration);
+      timer2Task.start();
+    } else if (output2Mode == 3) { // Purge mode
+      timer2Task.setPeriod(purgeDuration);
       timer2Task.start();
     } else {
       timer2Task.setPeriod(maxDuration);
@@ -183,7 +189,12 @@ void loop() {
       output1Mode = 1;
     }
   } else if (button1Dn.pressed() && !output1Active && !progMode) {
-    output1Mode = 0;
+    // Toggle purge mode
+    if (output1Mode == 0) {
+      output1Mode = 3;
+    } else {
+      output1Mode = 0;
+    }
   }
 
   // Toggle continuous mode
@@ -194,7 +205,12 @@ void loop() {
       output2Mode = 1;
     }
   } else if (button2Dn.pressed() && !output2Active && !progMode) {
-    output2Mode = 0;
+    // Toggle purge mode
+    if (output2Mode == 0) {
+      output2Mode = 3;
+    } else {
+      output2Mode = 0;
+    }
   }
 
   EEPROM.put(sizeof(output1Duration)+sizeof(output2Duration), output1Mode);
@@ -285,6 +301,8 @@ void updateLCD(bool progMode, int mode1, unsigned long rem1, int mode2, unsigned
     lcd.print(" CONT");
   } else if (mode1 == 2) {
     lcd.print(" HOLD");
+  } else if (mode1 == 3) {
+    lcd.print("PURGE");
   }
 
   // Display Timer 2 status
@@ -296,6 +314,8 @@ void updateLCD(bool progMode, int mode1, unsigned long rem1, int mode2, unsigned
     lcd.print(" CONT");
   } else if (mode2 == 2) {
     lcd.print(" HOLD");
+  } else if (mode2 == 3) {
+    lcd.print("PURGE");
   }
 }
 
