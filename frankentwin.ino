@@ -1,4 +1,4 @@
- #include <Wire.h>
+#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <msTask.h>
 #include <Bounce2.h>
@@ -165,6 +165,14 @@ void loop() {
     progMode = !progMode;
     EEPROM.put(0, output1Duration);
     EEPROM.put(sizeof(output1Duration), output2Duration); 
+  }
+
+  // Cancel grinding
+  if ((button1Up.pressed() || button1Dn.pressed() ||
+       button2Up.pressed() || button2Dn.pressed() ||
+       buttonProgMode.pressed()) && (output1Active || output2Active)) {
+    if (output1Active) { stopOutput1(); }
+    if (output2Active) { stopOutput2(); }
   }
 
   // Toggle continuous mode
